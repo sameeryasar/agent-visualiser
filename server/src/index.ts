@@ -2,6 +2,7 @@ import { createSessionWatcher } from './session-watcher';
 import { createFileReader } from './jsonl-parser';
 import { createStateManager } from './state-manager';
 import { createWsServer } from './ws-server';
+import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
@@ -20,6 +21,8 @@ stateManager.on('change', (state) => {
 
 watcher.on('session-changed', (session) => {
   stateManager.onSessionChanged(session.sessionId, session.projectDir);
+  const tasksDir = path.join(os.homedir(), '.claude', 'tasks', session.sessionId);
+  watchTasksDir(tasksDir);
 });
 
 watcher.on('session-file-changed', (filePath: string) => {
@@ -27,7 +30,7 @@ watcher.on('session-file-changed', (filePath: string) => {
   stateManager.onEvents(null, events);
 });
 
-watcher.on('subagent-file-changed', (filePath: string, sessionId: string) => {
+watcher.on('subagent-file-changed', (filePath: string, _sessionId: string) => {
   const events = reader.readNewLines(filePath);
   // extract agentId from filename: agent-<id>.jsonl
   const filename = path.basename(filePath, '.jsonl');
@@ -35,24 +38,13 @@ watcher.on('subagent-file-changed', (filePath: string, sessionId: string) => {
   stateManager.onEvents(agentId, events);
 });
 
-// Watch task files for the active session
-watcher.on('session-changed', (session) => {
-  const tasksDir = path.join(os.homedir(), '.claude', 'tasks', session.sessionId);
-  // chokidar already watches the session dir, but tasks are in a different location
-  // We need to also watch ~/.claude/tasks/<sessionId>/ for task JSON files
-  // For simplicity, poll this directory on a short interval
-  watchTasksDir(tasksDir);
-});
-
 let tasksDirInterval: NodeJS.Timeout | null = null;
-let currentTasksDir: string | null = null;
 
 function watchTasksDir(dir: string): void {
   if (tasksDirInterval) clearInterval(tasksDirInterval);
-  currentTasksDir = dir;
   tasksDirInterval = setInterval(() => {
     try {
-      const files = require('fs').readdirSync(dir);
+      const files = fs.readdirSync(dir);
       for (const f of files) {
         if (f.endsWith('.json')) {
           stateManager.onTaskFile(path.join(dir, f));

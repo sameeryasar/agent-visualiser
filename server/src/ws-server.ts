@@ -28,7 +28,8 @@ export function createWsServer(): WsServer {
           clients.delete(ws);
         });
 
-        ws.on('error', () => {
+        ws.on('error', (err) => {
+          console.error('[ws-server] client error:', err.message);
           clients.delete(ws);
         });
       });
