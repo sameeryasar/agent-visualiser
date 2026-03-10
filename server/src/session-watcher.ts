@@ -61,7 +61,7 @@ export function parseSubagentPath(filePath: string): { sessionId: string } | nul
 }
 
 export function createSessionWatcher(): SessionWatcher {
-  const emitter = new EventEmitter() as SessionWatcher;
+  const emitter = new EventEmitter();
 
   let watcher: FSWatcher | null = null;
   // Map from filePath → last-modified time (ms)
@@ -80,7 +80,8 @@ export function createSessionWatcher(): SessionWatcher {
     const candidateMtime = getMtime(candidate.filePath);
     fileMtimes.set(candidate.filePath, candidateMtime);
 
-    const currentMtime = activeSession ? (fileMtimes.get(activeSession.filePath) ?? 0) : -1;
+    // Re-stat the active session to avoid acting on a stale stored mtime
+    const currentMtime = activeSession ? getMtime(activeSession.filePath) : -1;
 
     if (candidateMtime >= currentMtime) {
       const previousId = activeSession?.sessionId;
@@ -108,29 +109,32 @@ export function createSessionWatcher(): SessionWatcher {
     }
   }
 
-  emitter.start = function (): void {
+  const sw = emitter as SessionWatcher;
+
+  sw.start = function (): void {
     if (watcher) return;
 
     watcher = chokidar.watch(PROJECTS_DIR, {
       persistent: true,
       ignoreInitial: false,
-      depth: 3, // enough for subagent paths: project/session/subagents/file.jsonl
+      depth: 4, // project/session/subagents/file.jsonl = 4 levels below root
     });
 
     watcher.on('add', handleFile);
     watcher.on('change', handleFile);
+    watcher.on('error', (err) => console.error('[session-watcher] chokidar error:', err));
   };
 
-  emitter.stop = function (): void {
+  sw.stop = function (): void {
     if (watcher) {
       watcher.close();
       watcher = null;
     }
   };
 
-  emitter.getActiveSession = function (): SessionInfo | null {
+  sw.getActiveSession = function (): SessionInfo | null {
     return activeSession;
   };
 
-  return emitter;
+  return sw;
 }
