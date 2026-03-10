@@ -1,45 +1,42 @@
-function App() {
+import { useWebSocket } from './hooks/useWebSocket';
+import { AgentTree } from './components/AgentTree';
+import { TaskBoard } from './components/TaskBoard';
+import { TokenMeter } from './components/TokenMeter';
+
+export default function App() {
+  const state = useWebSocket('ws://localhost:3001');
+
+  const sessionLabel = state.session
+    ? `Session: ${state.session.id} — ${state.session.project}`
+    : 'No active session';
+
   return (
-    <div style={{ display: 'flex', height: '100vh', fontFamily: 'sans-serif' }}>
-      {/* Left panel — Agent tree */}
-      <div
-        style={{
-          width: '25%',
-          borderRight: '1px solid #ccc',
-          padding: '1rem',
-          overflowY: 'auto',
-        }}
-      >
-        <h2>Agents</h2>
-        <p>Agent tree will appear here.</p>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'monospace', backgroundColor: '#0d1117', color: '#e6edf3' }}>
+      {/* Session header */}
+      <div style={{ padding: '8px 16px', borderBottom: '1px solid #30363d', backgroundColor: '#161b22', fontSize: '12px', color: '#8b949e' }}>
+        {sessionLabel}
       </div>
 
-      {/* Center panel — Task list / main view */}
-      <div
-        style={{
-          flex: 1,
-          padding: '1rem',
-          overflowY: 'auto',
-        }}
-      >
-        <h2>Tasks</h2>
-        <p>Task list will appear here.</p>
-      </div>
+      {/* 3-column layout */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        {/* Left: Agent tree */}
+        <div style={{ flex: '0 0 280px', borderRight: '1px solid #30363d', overflow: 'auto', padding: '16px' }}>
+          <h3 style={{ margin: '0 0 12px', color: '#58a6ff' }}>Agents</h3>
+          <AgentTree agents={state.agents} />
+        </div>
 
-      {/* Right panel — Token counts / session info */}
-      <div
-        style={{
-          width: '25%',
-          borderLeft: '1px solid #ccc',
-          padding: '1rem',
-          overflowY: 'auto',
-        }}
-      >
-        <h2>Tokens</h2>
-        <p>Token counts and session info will appear here.</p>
+        {/* Center: Tasks */}
+        <div style={{ flex: 1, borderRight: '1px solid #30363d', overflow: 'auto', padding: '16px' }}>
+          <h3 style={{ margin: '0 0 12px', color: '#58a6ff' }}>Tasks</h3>
+          <TaskBoard tasks={state.tasks} />
+        </div>
+
+        {/* Right: Tokens */}
+        <div style={{ flex: '0 0 320px', overflow: 'auto', padding: '16px' }}>
+          <h3 style={{ margin: '0 0 12px', color: '#58a6ff' }}>Tokens</h3>
+          <TokenMeter tokens={state.tokens} agents={state.agents} />
+        </div>
       </div>
     </div>
-  )
+  );
 }
-
-export default App
