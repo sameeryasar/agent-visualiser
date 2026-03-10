@@ -2,3 +2,7 @@ node_modules/
 dist/
 .env
 *.local
+
+# Claude / agent artifacts
+CLAUDE.md
+.claude/
