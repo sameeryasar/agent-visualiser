@@ -19,7 +19,11 @@ stateManager.on('change', (state) => {
   wsServer.broadcast(state);
 });
 
+let previousSessionFilePath: string | null = null;
+
 watcher.on('session-changed', (session) => {
+  if (previousSessionFilePath) reader.reset(previousSessionFilePath);
+  previousSessionFilePath = session.filePath;
   stateManager.onSessionChanged(session.sessionId, session.projectDir);
   const tasksDir = path.join(os.homedir(), '.claude', 'tasks', session.sessionId);
   watchTasksDir(tasksDir);

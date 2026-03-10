@@ -1,13 +1,12 @@
 import { Agent } from 'shared';
+import { fmtK } from '../utils';
 
 interface Props {
   agents: Agent[];
 }
 
 function formatTokens(counts: Agent['tokens']): string {
-  const total = counts.input + counts.output;
-  if (total >= 1000) return `${Math.round(total / 1000)}k`;
-  return `${total}`;
+  return fmtK(counts.input + counts.output);
 }
 
 function AgentNode({

@@ -103,7 +103,7 @@ export function createStateManager(): StateManager {
           }
 
           case 'token_usage': {
-            const agent = findAgent(event.agentId);
+            const agent = findAgent(event.agentId ?? agentId);
             if (agent) {
               replaceAgent({
                 ...agent,
@@ -126,7 +126,7 @@ export function createStateManager(): StateManager {
           }
 
           case 'agent_completed': {
-            const agent = findAgent(event.agentId);
+            const agent = findAgent(event.agentId ?? agentId);
             if (agent) {
               replaceAgent({ ...agent, status: 'completed', currentTool: null });
               changed = true;
@@ -135,7 +135,7 @@ export function createStateManager(): StateManager {
           }
 
           case 'tool_use': {
-            const agent = findAgent(event.agentId);
+            const agent = findAgent(event.agentId ?? agentId);
             if (agent) {
               replaceAgent({ ...agent, currentTool: event.toolName });
               changed = true;
