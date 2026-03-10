@@ -39,14 +39,14 @@ function extractEvents(line: Record<string, unknown>): ParsedEvent[] {
         const toolName = typeof toolItem.name === 'string' ? toolItem.name : '';
 
         if (toolName === 'Agent') {
-          // agent_launched event
-          const agentId = lineAgentId ?? crypto.randomUUID();
+          // agent_launched event — child gets the tool_use id as its identifier
+          const toolUseId = typeof toolItem.id === 'string' ? toolItem.id : crypto.randomUUID();
           const input = (toolItem.input as Record<string, unknown>) ?? null;
           const parentId = lineAgentId; // the current line's agentId is the parent
 
           events.push({
             kind: 'agent_launched',
-            agentId,
+            agentId: toolUseId,
             parentId,
             input,
           });
@@ -81,9 +81,9 @@ function extractEvents(line: Record<string, unknown>): ParsedEvent[] {
     }
   }
 
-  // Extract agent_completed when stop_reason is non-null
+  // Extract agent_completed — only for terminal stop reasons, not 'tool_use' pauses
   const stopReason = message.stop_reason;
-  if (stopReason !== null && stopReason !== undefined) {
+  if (stopReason !== null && stopReason !== undefined && stopReason !== 'tool_use') {
     events.push({
       kind: 'agent_completed',
       agentId: lineAgentId,

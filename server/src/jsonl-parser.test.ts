@@ -116,6 +116,7 @@ function cleanup(filePath: string): void {
     const ev = launched as Extract<ParsedEvent, { kind: 'agent_launched' }>;
     assert.strictEqual(ev.parentId, 'parent-agent');
     assert.ok(ev.agentId, 'agentId should be set');
+    assert.notStrictEqual(ev.agentId, ev.parentId, 'child agentId should differ from parentId');
     console.log('PASS: agent_launched extracted correctly');
   } finally {
     cleanup(tmpFile);
@@ -223,7 +224,26 @@ function cleanup(filePath: string): void {
   }
 }
 
-// ── Test 10: non-existent file returns [] ────────────────────────────────────
+// ── Test 10: stop_reason 'tool_use' does NOT emit agent_completed ─────────────
+{
+  const line = JSON.stringify({
+    type: 'assistant',
+    agentId: 'agent-paused',
+    message: { stop_reason: 'tool_use' },
+  });
+  const tmpFile = makeTempFile(line + '\n');
+  try {
+    const reader = createFileReader();
+    const events = reader.readNewLines(tmpFile);
+    const completed = events.filter((e) => e.kind === 'agent_completed');
+    assert.strictEqual(completed.length, 0, 'tool_use stop_reason should not emit agent_completed');
+    console.log('PASS: stop_reason tool_use does not emit agent_completed');
+  } finally {
+    cleanup(tmpFile);
+  }
+}
+
+// ── Test 12: non-existent file returns [] ─────────────────────────────────────
 {
   const reader = createFileReader();
   const events = reader.readNewLines('/tmp/does-not-exist-xyz-12345.jsonl');
