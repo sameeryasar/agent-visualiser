@@ -46,6 +46,10 @@ export function createStateManager(): StateManager {
     return state.agents.find((a) => a.id === id);
   }
 
+  function replaceAgent(updated: Agent): void {
+    state.agents = state.agents.map((a) => (a.id === updated.id ? updated : a));
+  }
+
   const manager: StateManager = {
     onSessionChanged(sessionId: string, projectDir: string): void {
       state = {
@@ -69,6 +73,9 @@ export function createStateManager(): StateManager {
       for (const event of events) {
         switch (event.kind) {
           case 'agent_launched': {
+            // Skip duplicate agent IDs
+            if (state.agents.some((a) => a.id === event.agentId)) break;
+
             // Infer type from input.subagent_type if available
             let agentType = 'agent';
             if (
@@ -98,12 +105,15 @@ export function createStateManager(): StateManager {
           case 'token_usage': {
             const agent = findAgent(event.agentId);
             if (agent) {
-              agent.tokens = {
-                input: agent.tokens.input + event.input,
-                output: agent.tokens.output + event.output,
-                cacheRead: agent.tokens.cacheRead + event.cacheRead,
-                cacheCreated: agent.tokens.cacheCreated + event.cacheCreated,
-              };
+              replaceAgent({
+                ...agent,
+                tokens: {
+                  input: agent.tokens.input + event.input,
+                  output: agent.tokens.output + event.output,
+                  cacheRead: agent.tokens.cacheRead + event.cacheRead,
+                  cacheCreated: agent.tokens.cacheCreated + event.cacheCreated,
+                },
+              });
             }
             state.tokens = {
               input: state.tokens.input + event.input,
@@ -118,8 +128,7 @@ export function createStateManager(): StateManager {
           case 'agent_completed': {
             const agent = findAgent(event.agentId);
             if (agent) {
-              agent.status = 'completed';
-              agent.currentTool = null;
+              replaceAgent({ ...agent, status: 'completed', currentTool: null });
               changed = true;
             }
             break;
@@ -128,7 +137,7 @@ export function createStateManager(): StateManager {
           case 'tool_use': {
             const agent = findAgent(event.agentId);
             if (agent) {
-              agent.currentTool = event.toolName;
+              replaceAgent({ ...agent, currentTool: event.toolName });
               changed = true;
             }
             break;
@@ -164,7 +173,9 @@ export function createStateManager(): StateManager {
       const task: Task = {
         id: typeof obj.id === 'string' ? obj.id : '',
         subject: typeof obj.subject === 'string' ? obj.subject : '',
-        status: (obj.status as Task['status']) ?? 'pending',
+        status: (['pending', 'in_progress', 'completed'] as const).includes(obj.status as Task['status'])
+          ? (obj.status as Task['status'])
+          : 'pending',
         activeForm: typeof obj.activeForm === 'string' ? obj.activeForm : null,
       };
 
