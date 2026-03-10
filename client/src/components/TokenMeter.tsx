@@ -87,7 +87,7 @@ export function TokenMeter({ tokens, agents }: { tokens: TokenCounts; agents: Ag
             <div key={agent.id} style={styles.agentRow}>
               <span style={styles.agentLabel}>{agent.type}</span>
               <span style={styles.agentTokens}>
-                {fmtK(agent.tokens.input)} in&nbsp;&nbsp;{fmtK(agent.tokens.output)} out
+                {fmtK(agent.tokens?.input ?? 0)} in &nbsp;{fmtK(agent.tokens?.output ?? 0)} out
               </span>
             </div>
           ))}

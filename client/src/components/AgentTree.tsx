@@ -6,10 +6,8 @@ interface Props {
 
 function formatTokens(counts: Agent['tokens']): string {
   const total = counts.input + counts.output;
-  if (total >= 1000) {
-    return `${Math.round(total / 1000)}k tokens`;
-  }
-  return `${total} tokens`;
+  if (total >= 1000) return `${Math.round(total / 1000)}k`;
+  return `${total}`;
 }
 
 function AgentNode({
@@ -55,7 +53,7 @@ function AgentNode({
 }
 
 export function AgentTree({ agents }: Props) {
-  const roots = agents.filter((a) => a.parentId === null || a.id === 'main');
+  const roots = agents.filter((a) => a.parentId === null);
 
   if (roots.length === 0) {
     return <div style={{ color: '#8b949e' }}>No agents</div>;
