@@ -1,12 +1,12 @@
 import * as fs from 'fs';
 import { EventEmitter } from 'events';
-import { State, Agent, Task, TokenCounts } from 'shared';
+import { State, SessionState, Agent, Task, TokenCounts } from 'shared';
 import { ParsedEvent } from './jsonl-parser';
 
 export interface StateManager {
-  onSessionChanged(sessionId: string, projectDir: string): void;
-  onEvents(agentId: string | null, events: ParsedEvent[]): void;
-  onTaskFile(filePath: string): void;
+  onSessionAdded(sessionId: string, projectDir: string): void;
+  onEvents(sessionId: string, agentId: string | null, events: ParsedEvent[]): void;
+  onTaskFile(sessionId: string, filePath: string): void;
   getState(): State;
   on(event: 'change', listener: (state: State) => void): this;
   off(event: 'change', listener: (state: State) => void): this;
@@ -47,56 +47,60 @@ function makeMainAgent(): Agent {
   };
 }
 
-export function createStateManager(): StateManager {
-  const emitter = new EventEmitter();
-
-  let state: State = {
-    session: null,
-    agents: [],
+function makeSessionState(sessionId: string, projectDir: string): SessionState {
+  return {
+    session: {
+      id: sessionId,
+      project: projectDir,
+      startTime: new Date().toISOString(),
+    },
+    agents: [makeMainAgent()],
     tasks: [],
     tokens: emptyTokenCounts(),
   };
+}
+
+function findAgentIn(sess: SessionState, agentId: string | null): Agent | undefined {
+  const id = agentId ?? 'main';
+  return sess.agents.find((a) => a.id === id);
+}
+
+function replaceAgentIn(sess: SessionState, updated: Agent): SessionState {
+  return { ...sess, agents: sess.agents.map((a) => (a.id === updated.id ? updated : a)) };
+}
+
+export function createStateManager(): StateManager {
+  const emitter = new EventEmitter();
+  const sessions = new Map<string, SessionState>();
+
+  function getState(): State {
+    return { sessions: Object.fromEntries(sessions) };
+  }
 
   function emitChange(): void {
-    emitter.emit('change', state);
-  }
-
-  function findAgent(agentId: string | null): Agent | undefined {
-    const id = agentId ?? 'main';
-    return state.agents.find((a) => a.id === id);
-  }
-
-  function replaceAgent(updated: Agent): void {
-    state.agents = state.agents.map((a) => (a.id === updated.id ? updated : a));
+    emitter.emit('change', getState());
   }
 
   const manager: StateManager = {
-    onSessionChanged(sessionId: string, projectDir: string): void {
-      state = {
-        session: {
-          id: sessionId,
-          project: projectDir,
-          startTime: new Date().toISOString(),
-        },
-        agents: [makeMainAgent()],
-        tasks: [],
-        tokens: emptyTokenCounts(),
-      };
+    onSessionAdded(sessionId: string, projectDir: string): void {
+      if (sessions.has(sessionId)) return;
+      sessions.set(sessionId, makeSessionState(sessionId, projectDir));
       emitChange();
     },
 
-    onEvents(agentId: string | null, events: ParsedEvent[]): void {
+    onEvents(sessionId: string, agentId: string | null, events: ParsedEvent[]): void {
       if (events.length === 0) return;
+
+      let sess = sessions.get(sessionId);
+      if (!sess) return;
 
       let changed = false;
 
       for (const event of events) {
         switch (event.kind) {
           case 'agent_launched': {
-            // Skip duplicate agent IDs
-            if (state.agents.some((a) => a.id === event.agentId)) break;
+            if (sess.agents.some((a) => a.id === event.agentId)) break;
 
-            // Infer type and description from input
             let agentType = 'agent';
             let agentDescription: string | null = null;
             if (
@@ -128,15 +132,15 @@ export function createStateManager(): StateManager {
               description: agentDescription,
               tokens: emptyTokenCounts(),
             };
-            state.agents = [...state.agents, newAgent];
+            sess = { ...sess, agents: [...sess.agents, newAgent] };
             changed = true;
             break;
           }
 
           case 'token_usage': {
-            const agent = findAgent(event.agentId ?? agentId);
+            const agent = findAgentIn(sess, event.agentId ?? agentId);
             if (agent) {
-              replaceAgent({
+              sess = replaceAgentIn(sess, {
                 ...agent,
                 tokens: {
                   input: agent.tokens.input + event.input,
@@ -146,29 +150,32 @@ export function createStateManager(): StateManager {
                 },
               });
             }
-            state.tokens = {
-              input: state.tokens.input + event.input,
-              output: state.tokens.output + event.output,
-              cacheRead: state.tokens.cacheRead + event.cacheRead,
-              cacheCreated: state.tokens.cacheCreated + event.cacheCreated,
+            sess = {
+              ...sess,
+              tokens: {
+                input: sess.tokens.input + event.input,
+                output: sess.tokens.output + event.output,
+                cacheRead: sess.tokens.cacheRead + event.cacheRead,
+                cacheCreated: sess.tokens.cacheCreated + event.cacheCreated,
+              },
             };
             changed = true;
             break;
           }
 
           case 'agent_completed': {
-            const agent = findAgent(event.agentId ?? agentId);
+            const agent = findAgentIn(sess, event.agentId ?? agentId);
             if (agent) {
-              replaceAgent({ ...agent, status: 'completed', currentTool: null, currentToolInput: null });
+              sess = replaceAgentIn(sess, { ...agent, status: 'completed', currentTool: null, currentToolInput: null });
               changed = true;
             }
             break;
           }
 
           case 'tool_use': {
-            const agent = findAgent(event.agentId ?? agentId);
+            const agent = findAgentIn(sess, event.agentId ?? agentId);
             if (agent) {
-              replaceAgent({
+              sess = replaceAgentIn(sess, {
                 ...agent,
                 currentTool: event.toolName,
                 currentToolInput: formatToolInput(event.toolName, event.toolInput),
@@ -181,11 +188,15 @@ export function createStateManager(): StateManager {
       }
 
       if (changed) {
+        sessions.set(sessionId, sess);
         emitChange();
       }
     },
 
-    onTaskFile(filePath: string): void {
+    onTaskFile(sessionId: string, filePath: string): void {
+      const sess = sessions.get(sessionId);
+      if (!sess) return;
+
       let raw: string;
       try {
         raw = fs.readFileSync(filePath, 'utf8');
@@ -214,22 +225,17 @@ export function createStateManager(): StateManager {
         activeForm: typeof obj.activeForm === 'string' ? obj.activeForm : null,
       };
 
-      const existingIndex = state.tasks.findIndex((t) => t.id === task.id);
-      if (existingIndex >= 0) {
-        state.tasks = [
-          ...state.tasks.slice(0, existingIndex),
-          task,
-          ...state.tasks.slice(existingIndex + 1),
-        ];
-      } else {
-        state.tasks = [...state.tasks, task];
-      }
+      const existingIndex = sess.tasks.findIndex((t) => t.id === task.id);
+      const newTasks = existingIndex >= 0
+        ? [...sess.tasks.slice(0, existingIndex), task, ...sess.tasks.slice(existingIndex + 1)]
+        : [...sess.tasks, task];
 
+      sessions.set(sessionId, { ...sess, tasks: newTasks });
       emitChange();
     },
 
     getState(): State {
-      return state;
+      return getState();
     },
 
     on(event: 'change', listener: (state: State) => void): StateManager {

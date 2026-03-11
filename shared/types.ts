@@ -23,9 +23,13 @@ export interface TokenCounts {
   cacheCreated: number;
 }
 
-export interface State {
-  session: { id: string; project: string; startTime: string } | null;
+export interface SessionState {
+  session: { id: string; project: string; startTime: string };
   agents: Agent[];
   tasks: Task[];
   tokens: TokenCounts;
+}
+
+export interface State {
+  sessions: Record<string, SessionState>;
 }

@@ -19,45 +19,42 @@ stateManager.on('change', (state) => {
   wsServer.broadcast(state);
 });
 
-let previousSessionFilePath: string | null = null;
+const taskIntervals = new Map<string, NodeJS.Timeout>();
 
-watcher.on('session-changed', (session) => {
-  if (previousSessionFilePath) reader.reset(previousSessionFilePath);
-  previousSessionFilePath = session.filePath;
-  stateManager.onSessionChanged(session.sessionId, session.projectDir);
+watcher.on('session-added', (session) => {
+  stateManager.onSessionAdded(session.sessionId, session.projectDir);
   const tasksDir = path.join(os.homedir(), '.claude', 'tasks', session.sessionId);
-  watchTasksDir(tasksDir);
+  watchTasksDir(session.sessionId, tasksDir);
 });
 
-watcher.on('session-file-changed', (filePath: string) => {
+watcher.on('session-file-changed', (filePath: string, sessionId: string) => {
   const events = reader.readNewLines(filePath);
-  stateManager.onEvents(null, events);
+  stateManager.onEvents(sessionId, null, events);
 });
 
-watcher.on('subagent-file-changed', (filePath: string, _sessionId: string) => {
+watcher.on('subagent-file-changed', (filePath: string, sessionId: string) => {
   const events = reader.readNewLines(filePath);
   // extract agentId from filename: agent-<id>.jsonl
   const filename = path.basename(filePath, '.jsonl');
   const agentId = filename.startsWith('agent-') ? filename.slice('agent-'.length) : null;
-  stateManager.onEvents(agentId, events);
+  stateManager.onEvents(sessionId, agentId, events);
 });
 
-let tasksDirInterval: NodeJS.Timeout | null = null;
-
-function watchTasksDir(dir: string): void {
-  if (tasksDirInterval) clearInterval(tasksDirInterval);
-  tasksDirInterval = setInterval(() => {
+function watchTasksDir(sessionId: string, dir: string): void {
+  if (taskIntervals.has(sessionId)) return;
+  const interval = setInterval(() => {
     try {
       const files = fs.readdirSync(dir);
       for (const f of files) {
         if (f.endsWith('.json')) {
-          stateManager.onTaskFile(path.join(dir, f));
+          stateManager.onTaskFile(sessionId, path.join(dir, f));
         }
       }
     } catch {
       // dir may not exist yet
     }
   }, 1000);
+  taskIntervals.set(sessionId, interval);
 }
 
 watcher.start();
