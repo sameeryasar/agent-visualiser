@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useWebSocket } from './hooks/useWebSocket';
 import { AgentTree } from './components/AgentTree';
 import { TaskBoard } from './components/TaskBoard';
@@ -41,6 +41,18 @@ const FIXTURE_STATE: State = {
       ],
       tokens: { input: 2900, output: 520, cacheRead: 600, cacheCreated: 80 },
     },
+    'fixture-session-3': {
+      session: { id: 'fixture-session-3', project: '/test/project-gamma', startTime: new Date().toISOString() },
+      agents: [
+        { id: 'main', type: 'main', status: 'completed', parentId: null,
+          currentTool: null, currentToolInput: null, description: null,
+          tokens: { input: 4500, output: 900, cacheRead: 800, cacheCreated: 150 } },
+      ],
+      tasks: [
+        { id: 'task-2', subject: 'Refactor state manager', status: 'completed', activeForm: null },
+      ],
+      tokens: { input: 4500, output: 900, cacheRead: 800, cacheCreated: 150 },
+    },
   },
 };
 
@@ -77,28 +89,43 @@ function SessionPanel({ sessionState }: { sessionState: SessionState }) {
   );
 }
 
+const isActiveSession = (s: SessionState) =>
+  s.agents.find(a => a.id === 'main')?.status === 'running';
+
 export default function App() {
   const isFixture = new URLSearchParams(window.location.search).has('fixture');
   const wsState = useWebSocket(isFixture ? null : 'ws://localhost:3001');
   const state = isFixture ? FIXTURE_STATE : wsState;
 
   const sessionEntries = Object.entries(state.sessions);
+  const activeSessions = sessionEntries.filter(([, s]) => isActiveSession(s));
+  const closedSessions = sessionEntries.filter(([, s]) => !isActiveSession(s));
 
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const effectiveId = activeId && state.sessions[activeId]
     ? activeId
-    : sessionEntries[0]?.[0] ?? null;
+    : (activeSessions[0]?.[0] ?? sessionEntries[0]?.[0] ?? null);
 
   const prevSessionIds = useRef<Set<string>>(new Set());
   useEffect(() => {
     const current = new Set(sessionEntries.map(([id]) => id));
     const newIds = [...current].filter(id => !prevSessionIds.current.has(id));
-    if (newIds.length > 0) setActiveId(newIds[newIds.length - 1]);
+    const newActiveIds = newIds.filter(id => isActiveSession(state.sessions[id]));
+    if (newActiveIds.length > 0) setActiveId(newActiveIds[newActiveIds.length - 1]);
     prevSessionIds.current = current;
   }, [sessionEntries.map(([id]) => id).join(',')]);
 
   const activeSession = effectiveId ? state.sessions[effectiveId] : null;
+
+  const tabStyle = (id: string, isClosed: boolean): React.CSSProperties => ({
+    padding: '8px 16px', border: 'none', borderRight: '1px solid #30363d',
+    backgroundColor: id === effectiveId ? '#0d1117' : 'transparent',
+    color: id === effectiveId ? '#e6edf3' : '#8b949e',
+    borderBottom: id === effectiveId ? '2px solid #58a6ff' : '2px solid transparent',
+    cursor: 'pointer', fontFamily: 'monospace', fontSize: '12px', whiteSpace: 'nowrap',
+    opacity: isClosed && id !== effectiveId ? 0.5 : 1,
+  });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', fontFamily: 'monospace', backgroundColor: '#0d1117', color: '#e6edf3' }}>
@@ -109,18 +136,22 @@ export default function App() {
       ) : (
         <>
           {/* Tab bar */}
-          <div style={{ display: 'flex', borderBottom: '1px solid #30363d', backgroundColor: '#161b22', overflowX: 'auto', flexShrink: 0 }}>
-            {sessionEntries.map(([id, s]) => (
-              <button key={id} onClick={() => setActiveId(id)} style={{
-                padding: '8px 16px', border: 'none', borderRight: '1px solid #30363d',
-                backgroundColor: id === effectiveId ? '#0d1117' : 'transparent',
-                color: id === effectiveId ? '#e6edf3' : '#8b949e',
-                borderBottom: id === effectiveId ? '2px solid #58a6ff' : '2px solid transparent',
-                cursor: 'pointer', fontFamily: 'monospace', fontSize: '12px', whiteSpace: 'nowrap',
-              }}>
+          <div style={{ display: 'flex', borderBottom: '1px solid #30363d', backgroundColor: '#161b22', overflowX: 'auto', flexShrink: 0, alignItems: 'stretch' }}>
+            {activeSessions.map(([id, s]) => (
+              <button key={id} onClick={() => setActiveId(id)} style={tabStyle(id, false)}>
                 {s.session.project.split('/').pop() ?? id}
               </button>
             ))}
+            {closedSessions.length > 0 && (
+              <>
+                <div style={{ width: 1, backgroundColor: '#30363d', margin: '6px 4px', flexShrink: 0 }} />
+                {closedSessions.map(([id, s]) => (
+                  <button key={id} onClick={() => setActiveId(id)} style={tabStyle(id, true)}>
+                    {s.session.project.split('/').pop() ?? id}
+                  </button>
+                ))}
+              </>
+            )}
           </div>
 
           {/* Active session panel */}
