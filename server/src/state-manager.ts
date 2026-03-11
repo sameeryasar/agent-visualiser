@@ -110,6 +110,11 @@ export function createStateManager(): StateManager {
               }
               if (typeof input.description === 'string') {
                 agentDescription = input.description;
+              } else if (typeof input.prompt === 'string') {
+                const firstLine = input.prompt.split('\n')[0].trim();
+                agentDescription = firstLine.length > 80
+                  ? firstLine.slice(0, 77) + '...'
+                  : firstLine || null;
               }
             }
 
