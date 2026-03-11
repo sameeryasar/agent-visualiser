@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
-import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
+import * as os from 'os';
+import * as fs from 'fs';
 import chokidar, { FSWatcher } from 'chokidar';
 
 export interface SessionInfo {
@@ -13,7 +13,6 @@ export interface SessionInfo {
 export interface SessionWatcher extends EventEmitter {
   start(): void;
   stop(): void;
-  getActiveSession(): SessionInfo | null;
 }
 
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
@@ -60,46 +59,30 @@ export function parseSubagentPath(filePath: string): { sessionId: string } | nul
   return { sessionId };
 }
 
+function isRecentlyModified(filePath: string): boolean {
+  try {
+    return Date.now() - fs.statSync(filePath).mtimeMs < 2 * 60 * 60 * 1000;
+  } catch {
+    return false;
+  }
+}
+
 export function createSessionWatcher(): SessionWatcher {
   const emitter = new EventEmitter();
 
   let watcher: FSWatcher | null = null;
-  // Map from filePath → last-modified time (ms)
-  const fileMtimes = new Map<string, number>();
-  let activeSession: SessionInfo | null = null;
-
-  function getMtime(filePath: string): number {
-    try {
-      return fs.statSync(filePath).mtimeMs;
-    } catch {
-      return 0;
-    }
-  }
-
-  function updateActiveSession(candidate: SessionInfo): void {
-    const candidateMtime = getMtime(candidate.filePath);
-    fileMtimes.set(candidate.filePath, candidateMtime);
-
-    // Re-stat the active session to avoid acting on a stale stored mtime
-    const currentMtime = activeSession ? getMtime(activeSession.filePath) : -1;
-
-    if (candidateMtime >= currentMtime) {
-      const previousId = activeSession?.sessionId;
-      activeSession = candidate;
-      if (previousId !== candidate.sessionId) {
-        emitter.emit('session-changed', candidate);
-      }
-    }
-  }
+  let isReady = false;
+  const seenSessions = new Set<string>();
 
   function handleFile(filePath: string): void {
     const mainInfo = parseMainSessionPath(filePath);
     if (mainInfo) {
-      updateActiveSession(mainInfo);
-      // Only emit session-file-changed when this IS the active session
-      if (activeSession?.filePath === filePath) {
-        emitter.emit('session-file-changed', filePath);
+      const { sessionId } = mainInfo;
+      if (!seenSessions.has(sessionId) && (isReady || isRecentlyModified(filePath))) {
+        seenSessions.add(sessionId);
+        emitter.emit('session-added', mainInfo);
       }
+      emitter.emit('session-file-changed', filePath, sessionId);
       return;
     }
 
@@ -122,6 +105,7 @@ export function createSessionWatcher(): SessionWatcher {
 
     watcher.on('add', handleFile);
     watcher.on('change', handleFile);
+    watcher.on('ready', () => { isReady = true; });
     watcher.on('error', (err) => console.error('[session-watcher] chokidar error:', err));
   };
 
@@ -130,10 +114,6 @@ export function createSessionWatcher(): SessionWatcher {
       watcher.close();
       watcher = null;
     }
-  };
-
-  sw.getActiveSession = function (): SessionInfo | null {
-    return activeSession;
   };
 
   return sw;
