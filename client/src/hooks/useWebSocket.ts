@@ -2,10 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { State } from 'shared';
 
 const EMPTY_STATE: State = {
-  session: null,
-  agents: [],
-  tasks: [],
-  tokens: { input: 0, output: 0, cacheRead: 0, cacheCreated: 0 },
+  sessions: {},
 };
 
 export function useWebSocket(url: string | null): State {
