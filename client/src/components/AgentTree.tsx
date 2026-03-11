@@ -31,10 +31,25 @@ function AgentNode({
   const connector = depth === 0 ? '' : isLast ? '└─ ' : '├─ ';
   const childPrefix = depth === 0 ? '' : prefix + (isLast ? '   ' : '│  ');
 
+  function getActionText(tool: string, input: string | null): string {
+    const label = (verb: string) => input ? `${verb} ${input}` : verb;
+    switch (tool) {
+      case 'Read':      return label('Reading');
+      case 'Write':     return label('Writing');
+      case 'Edit':      return label('Editing');
+      case 'MultiEdit': return label('Editing');
+      case 'Glob':      return label('Searching');
+      case 'Grep':      return input ? `Searching for ${input}` : 'Searching';
+      case 'Bash':      return input ? `Running ${input}` : 'Running bash';
+      case 'WebFetch':  return input ? `Fetching ${input}` : 'Fetching URL';
+      case 'WebSearch': return input ? `Searching "${input}"` : 'Searching web';
+      case 'Skill':     return input ? `Using skill: ${input}` : 'Using skill';
+      default:          return input ? `${tool}: ${input}` : tool;
+    }
+  }
+
   const toolLabel = agent.currentTool
-    ? agent.currentToolInput
-      ? `[${agent.currentTool}: ${agent.currentToolInput}]`
-      : `[${agent.currentTool}]`
+    ? getActionText(agent.currentTool, agent.currentToolInput)
     : null;
 
   return (
