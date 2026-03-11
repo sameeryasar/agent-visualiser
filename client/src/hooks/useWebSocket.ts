@@ -8,19 +8,20 @@ const EMPTY_STATE: State = {
   tokens: { input: 0, output: 0, cacheRead: 0, cacheCreated: 0 },
 };
 
-export function useWebSocket(url: string): State {
+export function useWebSocket(url: string | null): State {
   const [state, setState] = useState<State>(EMPTY_STATE);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unmountedRef = useRef(false);
 
   useEffect(() => {
+    if (url === null) return;
     unmountedRef.current = false;
 
     function connect() {
       if (unmountedRef.current) return;
 
-      const ws = new WebSocket(url);
+      const ws = new WebSocket(url!);
       wsRef.current = ws;
 
       ws.onmessage = (event: MessageEvent) => {

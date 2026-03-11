@@ -91,6 +91,9 @@ function AgentNode({
 
 export function AgentTree({ agents }: Props) {
   const roots = agents.filter((a) => a.parentId === null);
+  const total = agents.length;
+  const running = agents.filter((a) => a.status === 'running').length;
+  const completed = agents.filter((a) => a.status === 'completed').length;
 
   if (roots.length === 0) {
     return <div style={{ color: '#8b949e' }}>No agents</div>;
@@ -98,6 +101,9 @@ export function AgentTree({ agents }: Props) {
 
   return (
     <div style={{ fontFamily: 'monospace', fontSize: '13px' }}>
+      <div style={{ color: '#6b7280', fontSize: 11, marginBottom: 6 }}>
+        {total} agent{total !== 1 ? 's' : ''}{total > 0 ? ` · ${running} running · ${completed} done` : ''}
+      </div>
       {roots.map((root) => (
         <AgentNode key={root.id} agent={root} agents={agents} depth={0} prefix="" isLast={true} />
       ))}
