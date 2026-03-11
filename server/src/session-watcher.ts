@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
+import { spawnSync } from 'child_process';
 import chokidar, { FSWatcher } from 'chokidar';
 
 export interface SessionInfo {
@@ -59,9 +60,37 @@ export function parseSubagentPath(filePath: string): { sessionId: string } | nul
   return { sessionId };
 }
 
-function isRecentlyModified(filePath: string): boolean {
+/**
+ * Returns the set of JSONL files currently held open by any process under
+ * PROJECTS_DIR. Uses `lsof -F n +D <dir>` which outputs filenames prefixed
+ * with 'n', one per line. Returns an empty set if lsof is unavailable or
+ * finds nothing.
+ */
+function getOpenProjectFiles(): Set<string> {
+  const result = spawnSync('lsof', ['-F', 'n', '+D', PROJECTS_DIR], {
+    encoding: 'utf8',
+    timeout: 5000,
+  });
+  const open = new Set<string>();
+  if (!result.stdout) return open;
+  for (const line of result.stdout.split('\n')) {
+    if (line.startsWith('n') && line.endsWith('.jsonl')) {
+      open.add(line.slice(1));
+    }
+  }
+  return open;
+}
+
+/**
+ * Decide whether a file should be surfaced during the startup scan (pre-ready).
+ * Primary: file is held open by a running process (Claude Code using a stream).
+ * Fallback: if lsof found no open files at all (Claude Code may use appendFile),
+ * accept files modified within the last 2 minutes.
+ */
+function isStartupVisible(filePath: string, openFiles: Set<string>): boolean {
+  if (openFiles.size > 0) return openFiles.has(filePath);
   try {
-    return Date.now() - fs.statSync(filePath).mtimeMs < 2 * 60 * 60 * 1000;
+    return Date.now() - fs.statSync(filePath).mtimeMs < 2 * 60 * 1000;
   } catch {
     return false;
   }
@@ -73,12 +102,13 @@ export function createSessionWatcher(): SessionWatcher {
   let watcher: FSWatcher | null = null;
   let isReady = false;
   const seenSessions = new Set<string>();
+  const openFiles = getOpenProjectFiles();
 
   function handleFile(filePath: string): void {
     const mainInfo = parseMainSessionPath(filePath);
     if (mainInfo) {
       const { sessionId } = mainInfo;
-      if (!seenSessions.has(sessionId) && (isReady || isRecentlyModified(filePath))) {
+      if (!seenSessions.has(sessionId) && (isReady || isStartupVisible(filePath, openFiles))) {
         seenSessions.add(sessionId);
         emitter.emit('session-added', mainInfo);
       }
