@@ -42,13 +42,12 @@ watcher.on('subagent-file-changed', (filePath: string, sessionId: string) => {
 
 function watchTasksDir(sessionId: string, dir: string): void {
   if (taskIntervals.has(sessionId)) return;
+  console.log(`[tasks] Watching ${dir} for session ${sessionId}`);
   const interval = setInterval(() => {
     try {
-      const files = fs.readdirSync(dir);
+      const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
       for (const f of files) {
-        if (f.endsWith('.json')) {
-          stateManager.onTaskFile(sessionId, path.join(dir, f));
-        }
+        stateManager.onTaskFile(sessionId, path.join(dir, f));
       }
     } catch {
       // dir may not exist yet

@@ -226,6 +226,17 @@ export function createStateManager(): StateManager {
       };
 
       const existingIndex = sess.tasks.findIndex((t) => t.id === task.id);
+      const existing = existingIndex >= 0 ? sess.tasks[existingIndex] : undefined;
+
+      if (
+        existing &&
+        existing.subject === task.subject &&
+        existing.status === task.status &&
+        existing.activeForm === task.activeForm
+      ) {
+        return;
+      }
+
       const newTasks = existingIndex >= 0
         ? [...sess.tasks.slice(0, existingIndex), task, ...sess.tasks.slice(existingIndex + 1)]
         : [...sess.tasks, task];

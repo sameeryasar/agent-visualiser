@@ -72,6 +72,14 @@ function Column({ title, tasks }: { title: string; tasks: Task[] }) {
 }
 
 export function TaskBoard({ tasks }: { tasks: Task[] }) {
+  if (tasks.length === 0) {
+    return (
+      <div style={{ color: '#8b949e', fontSize: 12, fontStyle: 'italic', paddingTop: 4 }}>
+        No tasks — use TodoWrite or TaskCreate in your Claude session
+      </div>
+    );
+  }
+
   const pending = tasks.filter(t => t.status === 'pending');
   const inProgress = tasks.filter(t => t.status === 'in_progress');
   const completed = tasks.filter(t => t.status === 'completed');
