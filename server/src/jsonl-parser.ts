@@ -5,7 +5,7 @@ export type ParsedEvent =
   | { kind: 'agent_launched'; agentId: string; parentId: string | null; input: unknown }
   | { kind: 'token_usage'; agentId: string | null; input: number; output: number; cacheRead: number; cacheCreated: number }
   | { kind: 'agent_completed'; agentId: string | null }
-  | { kind: 'tool_use'; agentId: string | null; toolName: string };
+  | { kind: 'tool_use'; agentId: string | null; toolName: string; toolInput: unknown };
 
 export interface FileReader {
   readNewLines(filePath: string): ParsedEvent[];
@@ -56,6 +56,7 @@ function extractEvents(line: Record<string, unknown>): ParsedEvent[] {
             kind: 'tool_use',
             agentId: lineAgentId,
             toolName,
+            toolInput: toolItem.input ?? null,
           });
         }
       }

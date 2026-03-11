@@ -16,6 +16,24 @@ function emptyTokenCounts(): TokenCounts {
   return { input: 0, output: 0, cacheRead: 0, cacheCreated: 0 };
 }
 
+function formatToolInput(toolName: string, input: unknown): string | null {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  const i = input as Record<string, unknown>;
+  switch (toolName) {
+    case 'Read':
+    case 'Write':
+    case 'Edit':  return typeof i.file_path === 'string' ? i.file_path : null;
+    case 'Glob':  return typeof i.pattern === 'string' ? i.pattern : null;
+    case 'Grep':  return typeof i.pattern === 'string' ? i.pattern : null;
+    case 'Bash':  return typeof i.description === 'string' ? i.description
+                       : typeof i.command === 'string' ? i.command.slice(0, 60) : null;
+    default: {
+      const val = Object.values(i).find(v => typeof v === 'string');
+      return typeof val === 'string' ? val.slice(0, 60) : null;
+    }
+  }
+}
+
 function makeMainAgent(): Agent {
   return {
     id: 'main',
@@ -23,6 +41,8 @@ function makeMainAgent(): Agent {
     status: 'running',
     parentId: null,
     currentTool: null,
+    currentToolInput: null,
+    description: null,
     tokens: emptyTokenCounts(),
   };
 }
@@ -76,8 +96,9 @@ export function createStateManager(): StateManager {
             // Skip duplicate agent IDs
             if (state.agents.some((a) => a.id === event.agentId)) break;
 
-            // Infer type from input.subagent_type if available
+            // Infer type and description from input
             let agentType = 'agent';
+            let agentDescription: string | null = null;
             if (
               event.input &&
               typeof event.input === 'object' &&
@@ -87,6 +108,9 @@ export function createStateManager(): StateManager {
               if (typeof input.subagent_type === 'string') {
                 agentType = input.subagent_type;
               }
+              if (typeof input.description === 'string') {
+                agentDescription = input.description;
+              }
             }
 
             const newAgent: Agent = {
@@ -95,6 +119,8 @@ export function createStateManager(): StateManager {
               status: 'running',
               parentId: event.parentId ?? agentId,
               currentTool: null,
+              currentToolInput: null,
+              description: agentDescription,
               tokens: emptyTokenCounts(),
             };
             state.agents = [...state.agents, newAgent];
@@ -128,7 +154,7 @@ export function createStateManager(): StateManager {
           case 'agent_completed': {
             const agent = findAgent(event.agentId ?? agentId);
             if (agent) {
-              replaceAgent({ ...agent, status: 'completed', currentTool: null });
+              replaceAgent({ ...agent, status: 'completed', currentTool: null, currentToolInput: null });
               changed = true;
             }
             break;
@@ -137,7 +163,11 @@ export function createStateManager(): StateManager {
           case 'tool_use': {
             const agent = findAgent(event.agentId ?? agentId);
             if (agent) {
-              replaceAgent({ ...agent, currentTool: event.toolName });
+              replaceAgent({
+                ...agent,
+                currentTool: event.toolName,
+                currentToolInput: formatToolInput(event.toolName, event.toolInput),
+              });
               changed = true;
             }
             break;

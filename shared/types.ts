@@ -4,6 +4,8 @@ export interface Agent {
   status: 'running' | 'completed';
   parentId: string | null;
   currentTool: string | null;
+  currentToolInput: string | null;
+  description: string | null;
   tokens: TokenCounts;
 }
 

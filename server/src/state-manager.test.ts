@@ -153,7 +153,7 @@ import { ParsedEvent } from './jsonl-parser';
   const sm = createStateManager();
   sm.onSessionChanged('sess-1', '/proj');
 
-  sm.onEvents(null, [{ kind: 'tool_use', agentId: null, toolName: 'Bash' }]);
+  sm.onEvents(null, [{ kind: 'tool_use', agentId: null, toolName: 'Bash', toolInput: null }]);
   const mainBefore = sm.getState().agents.find((a) => a.id === 'main')!;
   assert.strictEqual(mainBefore.currentTool, 'Bash', 'currentTool should be set');
 
@@ -171,12 +171,12 @@ import { ParsedEvent } from './jsonl-parser';
   const sm = createStateManager();
   sm.onSessionChanged('sess-1', '/proj');
 
-  sm.onEvents(null, [{ kind: 'tool_use', agentId: null, toolName: 'Read' }]);
+  sm.onEvents(null, [{ kind: 'tool_use', agentId: null, toolName: 'Read', toolInput: null }]);
   const main = sm.getState().agents.find((a) => a.id === 'main')!;
   assert.strictEqual(main.currentTool, 'Read');
 
   // Update to a different tool
-  sm.onEvents(null, [{ kind: 'tool_use', agentId: null, toolName: 'Write' }]);
+  sm.onEvents(null, [{ kind: 'tool_use', agentId: null, toolName: 'Write', toolInput: null }]);
   assert.strictEqual(sm.getState().agents.find((a) => a.id === 'main')!.currentTool, 'Write');
 
   console.log('PASS: tool_use updates currentTool');
@@ -285,7 +285,7 @@ import { ParsedEvent } from './jsonl-parser';
   sm.onSessionChanged('sess-1', '/proj');
   assert.strictEqual(changeCount, 1, 'change fired after onSessionChanged');
 
-  sm.onEvents(null, [{ kind: 'tool_use', agentId: null, toolName: 'Bash' }]);
+  sm.onEvents(null, [{ kind: 'tool_use', agentId: null, toolName: 'Bash', toolInput: null }]);
   assert.strictEqual(changeCount, 2, 'change fired after onEvents with tool_use');
 
   sm.onEvents(null, [{ kind: 'agent_completed', agentId: null }]);
